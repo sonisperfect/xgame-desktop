@@ -124,19 +124,6 @@
    }
   },
   {
-   "id": "astro",
-   "group": "web",
-   "name": "ASTRO CHIBI",
-   "web": "/xg/astro",
-   "img": "/assets/stg-game-astro.webp?v=1",
-   "ko": "외계 달에서 살아남아 구조를 기다리는 서바이버 액션. 혼자, 스토리, 온라인 2인 협동.",
-   "en": "Survive on an alien moon until rescue — solo, story, or online 2-player co-op.",
-   "tag": {
-    "ko": "서바이버 · 2인 협동",
-    "en": "Survivor · 2P co-op"
-   }
-  },
-  {
    "id": "flap",
    "group": "arcade",
    "name": "SKY FOX",
