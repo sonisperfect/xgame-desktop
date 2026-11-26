@@ -50,8 +50,14 @@ function render() {
   $("#loginBtn").textContent = state.loggedIn ? L("로그아웃", "Sign out") : L("xgame.ai 로그인", "Sign in");
   const list = state.games.filter(g => filter === "all" || g.installed);
   const f = state.games.find(g => g.featured);
-  const h = $("#hero");
-  if (f && filter === "all") { h.hidden = false; h.style.backgroundImage = `url('${f.img}')`; h.innerHTML = hero(f); } else h.hidden = true;
+  const h = $("#hero"), first = !state.games.some(g => g.installed);
+  if (filter === "all" && first && f) {   // 처음 연 사람: 환영 화면 (Higgsfield 대표 그림)
+    h.hidden = false; h.style.backgroundImage = "url('welcome.webp')";
+    h.innerHTML = `<div class="in"><span class="muted">XGAME</span><h1>${L("모든 게임을<br>한 앱에서", "Every game,<br>one app")}</h1>
+      <p>${L("3D 게임은 받아 두면 인터넷 없이 실행되고, 웹 게임과 아케이드는 같은 로그인으로 바로 열립니다.", "3D games play offline once downloaded; web games and the arcade open with the same sign-in.")}</p>
+      <div class="row">${prog[f.id] ? `<span class="muted">${L("받는 중", "Downloading")}…</span>` : `<button class="btn gold" data-act="install" data-id="${f.id}">${esc(f.name)} ${L("받기", "— get it")}${f.size ? " · " + mb(f.size) : ""}</button>`}
+      <span class="muted">${L("또는 아래에서 골라 보세요", "or pick one below")}</span></div></div>`;
+  } else if (f && filter === "all") { h.hidden = false; h.style.backgroundImage = `url('${f.img}')`; h.innerHTML = hero(f); } else h.hidden = true;
   $("#groups").innerHTML = state.groups.map(gr => {
     const gs = list.filter(g => g.group === gr.id); if (!gs.length) return "";
     return `<h2>${esc(KO ? gr.ko : gr.en)}</h2><div class="grid">${gs.map(card).join("")}</div>`;
