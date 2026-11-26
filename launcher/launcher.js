@@ -11,6 +11,7 @@ const prog = {}, errs = {};
 function desc(g) { return KO ? g.ko : g.en || g.ko; }
 function status(g) {
   if (prog[g.id]) return {k: "busy"};
+  if (g.running) return {k: "running"};
   if (!g.pkg) return {k: "web"};
   if (g.installed) return {k: g.update ? "update" : "ready"};
   return {k: g.available ? "get" : "na"};
@@ -18,8 +19,12 @@ function status(g) {
 function actions(g) {
   const s = status(g), p = prog[g.id];
   if (s.k === "busy") { const pct = p.total ? Math.floor((100 * p.done) / p.total) : 0;
+    if (p.phase === "unpack") return `<div class="busy"><span class="muted">${L("설치하는 중…", "Installing…")}</span><div class="prog"><i data-pct="100"></i></div></div>`;
     return `<div class="busy"><span class="muted">${L("받는 중", "Downloading")} ${pct}%${p.total > 1 ? ` · ${mb(p.done)} / ${mb(p.total)}` : ""}</span><div class="prog"><i data-pct="${pct}"></i></div></div>`; }
-  if (s.k === "web") return `<button class="btn gold" data-act="play" data-id="${g.id}">${L("실행", "Play")}</button>`;
+  if (s.k === "running") return `<button class="btn" disabled>${L("실행 중", "Running")}</button>`;
+  if (s.k === "web") return `<button class="btn gold" data-act="play" data-id="${g.id}">${L("실행", "Play")}</button>` + (g.webSavable
+    ? (g.webSaved ? `<button class="btn ghost" data-act="unsaveweb" data-id="${g.id}" title="${esc(L("오프라인 저장 지우기", "Remove offline copy"))}">${L("오프라인 ✓", "Offline ✓")}</button>`
+      : `<button class="btn ghost" data-act="saveweb" data-id="${g.id}">${L("오프라인 저장", "Save offline")}</button>`) : "");
   if (s.k === "get") return `<button class="btn gold" data-act="install" data-id="${g.id}">${L("받기", "Get")}${g.size ? " · " + mb(g.size) : ""}</button>`;
   if (s.k === "na") return `<button class="btn" disabled>${L("준비 중", "Coming soon")}</button>`;
   const upd = s.k === "update" ? `<button class="btn" data-act="install" data-id="${g.id}">${L("업데이트", "Update")}</button>` : "";
@@ -27,9 +32,10 @@ function actions(g) {
 }
 function badge(g) {
   const s = status(g);
+  if (g.nativeOs) return `<span class="st ok">${s.k === "ready" || s.k === "running" ? L("설치됨 · 고화질", "Installed · HD native") : L("고화질 네이티브", "HD native")}</span>`;
   if (s.k === "ready") return `<span class="st ok">${L("설치됨", "Installed")}</span>`;
   if (s.k === "update") return `<span class="st ok">${L("업데이트 있음", "Update")}</span>`;
-  if (s.k === "web") return `<span class="st">${L("온라인", "Online")}</span>`;
+  if (s.k === "web") return `<span class="st${g.webSaved ? " ok" : ""}">${g.webSaved ? L("오프라인 가능", "Plays offline") : L("온라인", "Online")}</span>`;
   return "";
 }
 function card(g) {
@@ -77,10 +83,12 @@ document.addEventListener("click", async e => {
   if (act === "play") { try { await XG.play(id); } catch (err) { errs[id] = L("실행하지 못했어요", "Couldn't start"); render(); } }
   else if (act === "install") { prog[id] = {done: 0, total: 1}; render(); try { state = await XG.install(id); } catch (err) { errs[id] = L("받지 못했어요 — 다시 눌러 주세요", "Download failed — try again"); } delete prog[id]; render(); }
   else if (act === "remove") { state = await XG.remove(id); render(); }
+  else if (act === "saveweb") { prog[id] = {done: 0, total: 1}; render(); try { state = await XG.saveWeb(id); } catch (err) { errs[id] = L("저장하지 못했어요 — 다시 눌러 주세요", "Couldn't save — try again"); } delete prog[id]; render(); }
+  else if (act === "unsaveweb") { state = await XG.unsaveWeb(id); render(); }
 });
 XG.onProgress(p => {
   if (p.error) { errs[p.id] = L("받지 못했어요 — 다시 눌러 주세요", "Download failed — try again"); delete prog[p.id]; render(); return; }
-  if (p.done === true) { delete prog[p.id]; return; }
+  if (p.done === true) { delete prog[p.id]; load(false); return; }
   prog[p.id] = p;
   const c = document.getElementById("c-" + p.id); const g = state && state.games.find(x => x.id === p.id);
   if (c && g) c.querySelector(".acts").innerHTML = actions(g);   // 카드만 다시

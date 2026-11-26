@@ -5,6 +5,8 @@ contextBridge.exposeInMainWorld("XG", {
   install: id => ipcRenderer.invoke("xg:install", id),
   remove: id => ipcRenderer.invoke("xg:remove", id),
   play: id => ipcRenderer.invoke("xg:play", id),
+  saveWeb: id => ipcRenderer.invoke("xg:saveweb", id),
+  unsaveWeb: id => ipcRenderer.invoke("xg:unsaveweb", id),
   open: url => ipcRenderer.invoke("xg:open", url),
   login: () => ipcRenderer.send("xg:login"),
   logout: () => ipcRenderer.send("xg:logout"),

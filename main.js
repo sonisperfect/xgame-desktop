@@ -5,7 +5,7 @@
 // - 게임 창에는 window.AL_CFG / XG_CFG 로 토큰·서버 주소·로그인 열기를 준다 (AFTERLIGHT 데스크톱과 같은 방식).
 "use strict";
 const {app, BrowserWindow, ipcMain, shell, session, Menu, dialog} = require("electron");
-const http = require("http"), https = require("https"), fs = require("fs"), path = require("path");
+const http = require("http"), https = require("https"), fs = require("fs"), path = require("path"), {spawn, execFile} = require("child_process");
 
 const XGAME = process.env.XG_XGAME || "https://xgame.ai";
 const RT_AFTERLIGHT = process.env.XG_RT || "wss://xgame.ai/rt/afterlight/ws";
@@ -24,7 +24,7 @@ function broadcastToken() { for (const w of [launcher, ...gameWins.values()]) if
 // ---------- 내려받기: Node https 로 날것 그대로 (.br 을 풀지 않고 저장 — 로컬 서버가 Content-Encoding: br 로 낸다)
 function getRaw(url, redirects = 3) {
   return new Promise((ok, no) => {
-    const req = https.get(url, {headers: {"User-Agent": `XGAME-Desktop/${app.getVersion()}`, "Accept-Encoding": "identity"}}, res => {
+    const req = (url.startsWith("http:") ? http : https).get(url, {headers: {"User-Agent": `XGAME-Desktop/${app.getVersion()}`, "Accept-Encoding": "identity"}}, res => {
       if ([301, 302, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) { res.resume(); getRaw(new URL(res.headers.location, url).href, redirects - 1).then(ok, no); return; }
       if (res.statusCode !== 200) { res.resume(); no(new Error(`${res.statusCode} ${url}`)); return; }
       const chunks = []; res.on("data", c => chunks.push(c)); res.on("end", () => ok(Buffer.concat(chunks))); res.on("error", no);
@@ -34,6 +34,95 @@ function getRaw(url, redirects = 3) {
   });
 }
 const getJson = async url => JSON.parse((await getRaw(url)).toString("utf8"));
+// 큰 파일(네이티브 게임 묶음)을 디스크로 바로 — 진행률 콜백
+function download(url, dest, onp, redirects = 5) {
+  return new Promise((ok, no) => {
+    const req = (url.startsWith("http:") ? http : https).get(url, {headers: {"User-Agent": `XGAME-Desktop/${app.getVersion()}`, "Accept-Encoding": "identity"}}, res => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location && redirects > 0) { res.resume(); download(new URL(res.headers.location, url).href, dest, onp, redirects - 1).then(ok, no); return; }
+      if (res.statusCode !== 200) { res.resume(); no(new Error(`${res.statusCode} ${url}`)); return; }
+      const total = +res.headers["content-length"] || 0; let got = 0;
+      const out = fs.createWriteStream(dest);
+      res.on("data", c => { got += c.length; onp && onp(got, total); });
+      res.pipe(out); out.on("finish", () => out.close(() => ok(got))); res.on("error", no); out.on("error", no);
+    });
+    req.setTimeout(120000, () => req.destroy(new Error("timeout " + url)));
+    req.on("error", no);
+  });
+}
+
+// ---------- 네이티브 게임 (고화질판): catalog 의 native.{mac,win} — zip 을 받아 userData/native/<게임>/ 에 풀고 실행 파일을 직접 띄운다
+const OSK = process.platform === "darwin" ? "mac" : process.platform === "win32" ? "win" : null;
+const nativeDir = g => path.join(app.getPath("userData"), "native", g);
+// 서버 표(/api/platforms 의 native)가 먼저, 없으면 catalog.json 의 native
+const nativeOf = c => {
+  const r = remote.plat && remote.plat[c.id] && remote.plat[c.id].native, n = (r && OSK && r[OSK]) || (c.native && OSK && c.native[OSK]) || null;
+  return n ? {...n, url: /^https?:/.test(n.url) ? n.url : XGAME + n.url} : null;
+};
+function nativeInfo(g) { try { return JSON.parse(fs.readFileSync(path.join(nativeDir(g), "installed.json"), "utf8")); } catch (e) { return null; } }
+const running = new Map();
+function unzip(zip, dest) {
+  return new Promise((ok, no) => {
+    const done = e => (e ? no(e) : ok());
+    if (process.platform === "darwin") execFile("/usr/bin/ditto", ["-x", "-k", zip, dest], done);
+    else execFile("powershell.exe", ["-NoProfile", "-Command", `Expand-Archive -LiteralPath '${zip}' -DestinationPath '${dest}' -Force`], done);
+  });
+}
+async function installNative(g) {
+  const c = CATALOG.games.find(x => x.id === g), n = c && nativeOf(c); if (!n) throw new Error("no native build for this OS");
+  if (busy.get(g)) return;
+  const st = {phase: "download", done: 0, total: n.size || 1}; busy.set(g, st); notify(g);
+  const dst = nativeDir(g), tmp = dst + ".part", zip = dst + ".zip";
+  try {
+    fs.mkdirSync(path.dirname(dst), {recursive: true}); fs.rmSync(tmp, {recursive: true, force: true});
+    await download(n.url, zip, (got, total) => { st.done = got; st.total = total || st.total; if (!installNative._t || Date.now() - installNative._t > 200) { installNative._t = Date.now(); notify(g); } });
+    st.phase = "unpack"; st.done = st.total; notify(g);
+    fs.mkdirSync(tmp, {recursive: true}); await unzip(zip, tmp); fs.rmSync(zip, {force: true});
+    fs.writeFileSync(path.join(tmp, "installed.json"), JSON.stringify({ver: n.ver, size: n.size, exe: n.exe, at: Date.now()}));
+    fs.rmSync(dst, {recursive: true, force: true}); fs.renameSync(tmp, dst);
+    busy.delete(g); notify(g);
+  } catch (e) {
+    fs.rmSync(tmp, {recursive: true, force: true}); fs.rmSync(zip, {force: true}); busy.delete(g);
+    if (launcher && !launcher.isDestroyed()) launcher.webContents.send("xg:progress", {id: g, error: String(e.message || e)});
+    throw e;
+  }
+}
+// 실행: 로그인 토큰·서버·게임 ID 를 실행 인자로 (게임 안 XgSdk 가 읽는다)
+function playNative(g) {
+  const inst = nativeInfo(g); if (!inst) throw new Error("not installed");
+  if (running.has(g)) return;
+  const exe = path.join(nativeDir(g), inst.exe);
+  const args = ["-xgServer", XGAME, "-xgGame", g, ...(token ? ["-xgToken", token] : [])];
+  const p = spawn(exe, args, {detached: false, stdio: "ignore", env: {...process.env, XG_SERVER: XGAME}});
+  running.set(g, p); notify(g);
+  p.on("exit", () => { running.delete(g); notify(g); });
+  p.on("error", e => { running.delete(g); console.error("[xg] native", e); notify(g); });
+}
+function removeNative(g) { const p = running.get(g); if (p) p.kill(); fs.rmSync(nativeDir(g), {recursive: true, force: true}); notify(g); }
+
+// ---------- 웹 게임 '오프라인 저장': xgame.ai 를 숨은 창(같은 세션)으로 열어 사이트의 OFFL.install 을 부른다 → 끊겨도 그 세션의 서비스 워커가 저장본을 낸다
+const WEBSAVE = () => path.join(app.getPath("userData"), "websaved.json");
+function webSaved() { try { return JSON.parse(fs.readFileSync(WEBSAVE(), "utf8")); } catch (e) { return {}; } }
+async function saveWeb(g) {
+  if (busy.get(g)) return;
+  const st = {phase: "download", done: 0, total: 1}; busy.set(g, st); notify(g);
+  const w = new BrowserWindow({show: false, webPreferences: {partition: PART, contextIsolation: true, nodeIntegration: false}});
+  try {
+    await w.loadURL(XGAME + "/app#/arcade");
+    for (let i = 0; i < 40 && !(await w.webContents.executeJavaScript("typeof OFFL === 'object'")); i++) await new Promise(r => setTimeout(r, 250));
+    const timer = setInterval(async () => { try { const f = await w.webContents.executeJavaScript("window.__xgp || 0"); st.done = f; notify(g); } catch (e) { /* */ } }, 400);
+    try { await w.webContents.executeJavaScript(`OFFL.install(${JSON.stringify(g)}, f => { window.__xgp = f; }).then(() => true)`, true); } finally { clearInterval(timer); }
+    const size = await w.webContents.executeJavaScript(`OFFL.size(${JSON.stringify(g)})`);
+    const m = webSaved(); m[g] = {at: Date.now(), size}; fs.writeFileSync(WEBSAVE(), JSON.stringify(m));
+    busy.delete(g); notify(g);
+  } catch (e) {
+    busy.delete(g); if (launcher && !launcher.isDestroyed()) launcher.webContents.send("xg:progress", {id: g, error: String(e.message || e)}); throw e;
+  } finally { if (!w.isDestroyed()) w.destroy(); }
+}
+async function unsaveWeb(g) {
+  const w = new BrowserWindow({show: false, webPreferences: {partition: PART}});
+  try { await w.loadURL(XGAME + "/app#/arcade"); await w.webContents.executeJavaScript(`caches.delete("xg-web-" + ${JSON.stringify(g)})`); } catch (e) { /* 오프라인이면 다음에 */ } finally { if (!w.isDestroyed()) w.destroy(); }
+  const m = webSaved(); delete m[g]; fs.writeFileSync(WEBSAVE(), JSON.stringify(m)); notify(g);
+}
 
 // ---------- 목록: 기본 목록 + 서버 표(크기·판·사용 가능) + 설치 상태
 const gameDir = g => path.join(GAMES_DIR(), g);
@@ -70,9 +159,14 @@ async function catalogState(force) {
     xgame: XGAME, version: app.getVersion(), loggedIn: !!token, groups: CATALOG.groups,
     games: CATALOG.games.map(c => {
       const inst = c.pkg ? installedInfo(c.id) : null, man = r.man[c.id], plat = r.plat && r.plat[c.id];
+      const nat = nativeOf(c), ninst = nat ? nativeInfo(c.id) : null;
+      if (nat) return {...c, img: fs.existsSync(imgFile(c.id)) ? `http://127.0.0.1:${port}/img/${c.id}` : XGAME + c.img, nativeOs: OSK,
+        installed: ninst ? {ver: ninst.ver, size: ninst.size} : null, size: nat.size, available: true, update: !!(ninst && ninst.ver !== nat.ver),
+        running: running.has(c.id), busy: busy.get(c.id) || null};
       return {...c, img: fs.existsSync(imgFile(c.id)) ? `http://127.0.0.1:${port}/img/${c.id}` : XGAME + c.img, installed: inst ? {ver: inst.ver, size: inst.size} : null,
         remoteVer: man ? man.ver : null, size: man ? man.size : (plat && plat.size) || 0,
-        available: c.pkg ? !!man || !!inst : true, update: !!(inst && man && man.ver !== inst.ver), busy: busy.get(c.id) || null};
+        available: c.pkg ? !!man || !!inst : true, update: !!(inst && man && man.ver !== inst.ver), busy: busy.get(c.id) || null,
+        webSaved: c.pkg ? null : (webSaved()[c.id] || null), webSavable: !c.pkg && c.offline !== false};
     }),
   };
 }
@@ -183,9 +277,12 @@ function logout() { saveToken(null); try { session.fromPartition(PART).clearStor
 
 // ---------- IPC
 ipcMain.handle("xg:catalog", (ev, force) => catalogState(!!force));
-ipcMain.handle("xg:install", async (ev, g) => { await install(g); return catalogState(false); });
-ipcMain.handle("xg:remove", (ev, g) => { remove(g); return catalogState(false); });
-ipcMain.handle("xg:play", (ev, g) => { play(g); return true; });
+const isNative = g => { const c = CATALOG.games.find(x => x.id === g); return !!(c && nativeOf(c)); };
+ipcMain.handle("xg:install", async (ev, g) => { await (isNative(g) ? installNative(g) : install(g)); return catalogState(false); });
+ipcMain.handle("xg:remove", (ev, g) => { isNative(g) ? removeNative(g) : remove(g); return catalogState(false); });
+ipcMain.handle("xg:play", (ev, g) => { isNative(g) ? playNative(g) : play(g); return true; });
+ipcMain.handle("xg:saveweb", async (ev, g) => { await saveWeb(g); return catalogState(false); });
+ipcMain.handle("xg:unsaveweb", async (ev, g) => { await unsaveWeb(g); return catalogState(false); });
 ipcMain.handle("xg:open", (ev, url) => { if (/^https:\/\//.test(url)) shell.openExternal(url); return true; });
 ipcMain.on("xg:login", () => openLogin());
 ipcMain.on("xg:logout", () => logout());
