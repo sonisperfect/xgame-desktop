@@ -68,7 +68,7 @@ function unzip(zip, dest) {
   });
 }
 async function installNative(g) {
-  const c = CATALOG.games.find(x => x.id === g), n = c && nativeOf(c); if (!n) throw new Error("no native build for this OS");
+  const c = allGames().find(x => x.id === g), n = c && nativeOf(c); if (!n) throw new Error("no native build for this OS");
   if (busy.get(g)) return;
   const st = {phase: "download", done: 0, total: n.size || 1}; busy.set(g, st); notify(g);
   const dst = nativeDir(g), tmp = dst + ".part", zip = dst + ".zip";
@@ -147,17 +147,23 @@ async function cacheImages() {
   if (imgBusy) return; imgBusy = true;
   try {
     fs.mkdirSync(IMG_DIR(), {recursive: true});
-    for (const c of CATALOG.games) {
-      if (fs.existsSync(imgFile(c.id))) continue;
+    for (const c of allGames()) {
+      if (!c.img || fs.existsSync(imgFile(c.id))) continue;
       try { const buf = await getRaw(XGAME + c.img); if (buf.length > 1000) fs.writeFileSync(imgFile(c.id), buf); } catch (e) { /* 아직 없는 그림 */ }
     }
   } finally { imgBusy = false; }
+}
+function allGames() {
+  const extra = remote.plat ? Object.entries(remote.plat).filter(([g, p]) => p.nativeOnly && !CATALOG.games.some(c => c.id === g))
+    .map(([g, p]) => ({id: g, group: "3d", name: p.name || g, img: p.img || "", ko: (p.desc || {}).ko || "", en: (p.desc || {}).en || "", nativeOnly: true, featured: false})) : [];
+  return [...extra, ...CATALOG.games];
 }
 async function catalogState(force) {
   const r = await refreshRemote(force);
   return {
     xgame: XGAME, version: app.getVersion(), loggedIn: !!token, groups: CATALOG.groups,
-    games: CATALOG.games.map(c => {
+    games: allGames().map(c => {
+      if (c.nativeOnly && !nativeOf(c)) return {...c, img: XGAME + c.img, available: false, installed: null, size: 0, nativeOs: OSK, busy: busy.get(c.id) || null};   // 이 OS 판 아직 없음
       const inst = c.pkg ? installedInfo(c.id) : null, man = r.man[c.id], plat = r.plat && r.plat[c.id];
       const nat = nativeOf(c), ninst = nat ? nativeInfo(c.id) : null;
       if (nat) return {...c, img: fs.existsSync(imgFile(c.id)) ? `http://127.0.0.1:${port}/img/${c.id}` : XGAME + c.img, nativeOs: OSK,
@@ -277,7 +283,7 @@ function logout() { saveToken(null); try { session.fromPartition(PART).clearStor
 
 // ---------- IPC
 ipcMain.handle("xg:catalog", (ev, force) => catalogState(!!force));
-const isNative = g => { const c = CATALOG.games.find(x => x.id === g); return !!(c && nativeOf(c)); };
+const isNative = g => { const c = allGames().find(x => x.id === g); return !!(c && nativeOf(c)); };
 ipcMain.handle("xg:install", async (ev, g) => { await (isNative(g) ? installNative(g) : install(g)); return catalogState(false); });
 ipcMain.handle("xg:remove", (ev, g) => { isNative(g) ? removeNative(g) : remove(g); return catalogState(false); });
 ipcMain.handle("xg:play", (ev, g) => { isNative(g) ? playNative(g) : play(g); return true; });

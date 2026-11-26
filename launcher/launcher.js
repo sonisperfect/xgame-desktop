@@ -12,7 +12,8 @@ function desc(g) { return KO ? g.ko : g.en || g.ko; }
 function status(g) {
   if (prog[g.id]) return {k: "busy"};
   if (g.running) return {k: "running"};
-  if (!g.pkg) return {k: "web"};
+  if (g.nativeOnly && !g.available) return {k: "na"};
+  if (!g.pkg && !g.nativeOs) return {k: "web"};
   if (g.installed) return {k: g.update ? "update" : "ready"};
   return {k: g.available ? "get" : "na"};
 }
