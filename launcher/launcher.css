@@ -1,0 +1,47 @@
+:root{--bg:#06070b;--panel:#0e1017;--panel2:#141722;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.16);--txt:#eceae4;--dim:#a2a5b0;--acc:#c6ff3d;--accd:#0a0d00}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--txt);font:14.5px/1.55 -apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Segoe UI","Malgun Gothic",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
+body{display:flex;flex-direction:column;min-height:100vh}
+button{font:inherit;color:inherit}
+.muted{color:var(--dim)}
+.top{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:28px;padding:14px 32px;background:rgba(6,7,11,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--line);-webkit-app-region:drag}
+.top button,.top a{-webkit-app-region:no-drag}
+.brand{font-weight:900;font-size:22px;letter-spacing:.02em;color:var(--acc)}
+.filters{display:flex;gap:6px;flex-grow:1}
+.filters button{background:none;border:0;padding:8px 12px;border-radius:8px;color:var(--dim);cursor:pointer;font-weight:600}
+.filters button.on{color:var(--txt);background:var(--panel2)}
+.who{display:flex;align-items:center;gap:12px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:38px;padding:0 16px;border-radius:10px;border:1px solid var(--line2);background:var(--panel2);font-weight:700;cursor:pointer;white-space:nowrap}
+.btn:hover{border-color:rgba(255,255,255,.3)}
+.btn.gold{background:var(--acc);color:var(--accd);border:0}
+.btn.gold:hover{filter:brightness(1.05)}
+.btn:disabled{opacity:.5;cursor:default}
+.btn.ghost{background:none;border:0;color:var(--dim);padding:0 8px;min-height:32px;font-weight:600}
+.btn.ghost:hover{color:var(--txt)}
+main{flex-grow:1;padding:0 32px 32px;max-width:1440px;width:100%;margin:0 auto}
+.hero{position:relative;margin:24px 0 8px;border-radius:18px;overflow:hidden;min-height:340px;display:flex;align-items:flex-end;background:#0b0c12 center/cover no-repeat;border:1px solid var(--line)}
+.hero::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(6,7,11,.95) 0%,rgba(6,7,11,.75) 36%,rgba(6,7,11,.05) 70%)}
+.hero .in{position:relative;padding:36px 40px;max-width:560px;display:flex;flex-direction:column;gap:12px}
+.hero h1{margin:0;font-size:46px;line-height:1.05;font-weight:900;letter-spacing:-.01em}
+.hero p{margin:0;color:#d6d4ce;font-size:15.5px}
+.hero .row{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-top:6px}
+.hero .btn{min-height:48px;padding:0 26px;font-size:16px}
+h2{margin:34px 0 14px;font-size:17px;font-weight:800;letter-spacing:.01em}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;transition:border-color .15s,transform .15s}
+.card:hover{border-color:var(--line2);transform:translateY(-2px)}
+.card .ban{height:128px;background:#0b0c12 center/cover no-repeat;position:relative}
+.card .ban .st{position:absolute;left:10px;top:10px;font-size:11.5px;font-weight:800;padding:3px 9px;border-radius:999px;background:rgba(6,7,11,.78);color:var(--txt)}
+.card .ban .st.ok{color:var(--acc)}
+.card .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:6px;flex-grow:1}
+.card .name{font-weight:800;font-size:15.5px}
+.card .desc{color:var(--dim);font-size:13px;min-height:2.6em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.card .acts{display:flex;align-items:center;gap:8px;margin-top:6px}
+.card .acts .btn{flex-grow:1}
+.prog{height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin-top:4px}
+.prog i{display:block;height:100%;width:0;background:var(--acc);transition:width .2s}
+.err{color:#ff8a7a;font-size:12.5px}
+.note{margin-top:24px;padding:12px 14px;border-radius:12px;background:rgba(139,92,246,.09);border:1px solid rgba(139,92,246,.3);font-size:13px}
+.foot{display:flex;justify-content:space-between;gap:16px;padding:12px 32px;border-top:1px solid var(--line);font-size:12px}
+.empty{color:var(--dim);padding:40px 0;text-align:center}
+.busy{flex-grow:1;display:flex;flex-direction:column;gap:6px;font-size:12.5px;min-height:38px;justify-content:center}

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' https://xgame.ai http://127.0.0.1:* data:; style-src 'self'; script-src 'self'">
+<title>XGAME</title>
+<link rel="stylesheet" href="launcher.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">XGAME</div>
+  <nav class="filters" aria-label="목록 보기">
+    <button type="button" class="on" data-filter="all">전체</button>
+    <button type="button" data-filter="installed">내 게임</button>
+  </nav>
+  <div class="who">
+    <span id="whoText" class="muted"></span>
+    <button type="button" id="loginBtn" class="btn"></button>
+  </div>
+</header>
+<main id="main">
+  <section id="hero" class="hero" hidden></section>
+  <div id="groups"></div>
+  <p id="offline" class="note" hidden></p>
+</main>
+<footer class="foot muted"><span id="ver"></span><span>게임은 이 컴퓨터에 저장되어 인터넷 없이도 실행됩니다 · 기록은 xgame.ai 계정에 저장</span></footer>
+<script src="launcher.js"></script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+{
+  "name": "xgame-desktop",
+  "productName": "XGAME",
+  "version": "0.1.0",
+  "description": "XGAME — 모든 게임을 한 앱에서 (xgame.ai)",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:mac": "electron-builder --mac",
+    "dist:win": "electron-builder --win",
+    "dist": "electron-builder --mac --win"
+  },
+  "devDependencies": {
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0"
+  },
+  "build": {
+    "appId": "ai.xgame.desktop",
+    "productName": "XGAME",
+    "artifactName": "XGAME-${version}-${os}-${arch}.${ext}",
+    "directories": { "output": "dist", "buildResources": "build" },
+    "files": ["main.js", "preload.js", "launcher-preload.js", "catalog.json", "launcher/**", "package.json"],
+    "asar": true,
+    "mac": { "category": "public.app-category.games", "target": [{ "target": "dmg", "arch": ["arm64", "x64"] }], "icon": "build/icon.icns", "hardenedRuntime": false, "identity": null },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }], "icon": "build/icon.png" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "perMachine": false, "shortcutName": "XGAME" },
+    "dmg": { "title": "XGAME" }
+  }
+}
